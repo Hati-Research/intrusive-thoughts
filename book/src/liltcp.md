@@ -1,3 +1,4 @@
+<!-- TODO: split these headings into separate subchapters, it is becoming unreadable and cluttered -->
 # liltcp
 
 > liltcp's aim is to write minimal, yet functional and performant async smoltcp
@@ -17,4 +18,66 @@ but uses the critical parts of the software stack (stm32h7xx-hal and lilos).
 
 If the code works you should see a blinking LED (amber on the Nucleo devkit).
 
-## Basic blocking example from the HAL
+## Basic non-async example from the HAL
+
+Next validation step is to port the basic example from the HAL to our program
+and make sure that the code reacts to link UP/DOWN events.
+This validates that the ethernet peripheral and PHY are configured correctly.
+
+```rust
+{{#include ../../liltcp/src/bin/bare_eth.rs}}
+```
+
+Apart from the initialization code, this adds a new async task, responsible for
+checking if the link is up or down.
+
+## Polled TCP
+
+Let's now make another step forward and add a smoltcp TCP client.
+This client will be driven by periodic polling.
+This is similar to the classic [RTIC based examples](https://github.com/stm32-rs/stm32-eth/blob/master/examples/rtic-echo.rs),
+where the whole stack is dealt with inside of the ethernet interrupt.
+
+This example is a bit more elaborate and its source can be found [here](https://github.com/Hati-Research/intrusive-thoughts/blob/main/liltcp/src/bin/polled_tcp.rs).
+
+Let's describe the important parts here.
+
+First, we need to initialize the interface.
+As can be seen, an IP address is set to the interface, according to your local network settings.
+Then we statically allocate a `SocketStorage` with a fixed capacity of `1`,
+since we will be adding only one socket for now.
+
+```rust,ignored
+{{#include ../../liltcp/src/bin/polled_tcp.rs:interface_init}}
+```
+
+Next, we want to add a task that will handle the polling:
+
+```rust,ignored
+{{#include ../../liltcp/src/bin/polled_tcp.rs:poll_smoltcp}}
+```
+
+This task first, allocates a TCP socket in the provided `SocketSet`,
+then attempts to connect (if socket is not open)
+and then tries to send and receive data).
+
+The whole polling runs with a millisecond loop.
+This is definitely not performat, we want the polling to be triggered by
+either the ethernet interrupt or when `smoltcp` tells us to via its `poll_at` method.
+
+Finally, we spawn the task in `main` using the following.
+
+```rust, ignored
+{{#include ../../liltcp/src/bin/polled_tcp.rs:spawn}}
+```
+
+We now have a TCP client that is able to connect to a remote server
+and it works for the most basic of use cases.
+Apart from the mentioned performance shortcomings,
+it is also tiresome to add more sockets or their handling.
+We'd need to handle everything networking-related in this task,
+which would not be very readable
+and would break both the Locality of Behavior and Separation of Concers principles,
+that we want to uphold in all of our code.
+
+> The functionality was tested using a simple program found [here](https://github.com/Hati-Research/intrusive-thoughts/blob/main/test-tcp-server/src/main.rs).

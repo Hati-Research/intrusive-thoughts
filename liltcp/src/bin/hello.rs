@@ -30,10 +30,13 @@ fn main() -> ! {
 
     lilos::time::initialize_sys_tick(&mut cp.SYST, ccdr.clocks.sysclk().to_Hz());
 
-    lilos::exec::run_tasks(&mut [core::pin::pin!(task1(led))], lilos::exec::ALL_TASKS)
+    lilos::exec::run_tasks(
+        &mut [core::pin::pin!(led_task(led))],
+        lilos::exec::ALL_TASKS,
+    )
 }
 
-async fn task1(mut led: ErasedPin<Output>) -> Infallible {
+async fn led_task(mut led: ErasedPin<Output>) -> Infallible {
     let mut gate = PeriodicGate::from(lilos::time::Millis(500));
     loop {
         led.toggle();
