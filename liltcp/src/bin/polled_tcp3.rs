@@ -1,29 +1,23 @@
 #![no_main]
 #![no_std]
 
-use core::{
-    cell::{RefCell, RefMut},
-    convert::Infallible,
-    future::poll_fn,
-    task::Poll,
-};
+use core::{cell::RefCell, convert::Infallible};
 
 use cortex_m::interrupt::Mutex;
+use embassy_futures::select;
 use grounded::uninit::GroundedCell;
-use lilos::{
-    exec::Interrupts,
-    time::{sleep_for, Millis, PeriodicGate},
-};
-use liltcp as _;
+use lilos::exec::Interrupts;
+use liltcp::stack::{Stack, StackState};
+use liltcp::tcp::TcpClient;
+use liltcp::{self as _, smoltcp_lilos::smol_now};
+
 use smoltcp::{
-    iface::{Context, Interface, SocketHandle, SocketSet, SocketStorage},
-    socket::tcp,
-    storage::RingBuffer,
+    iface::{Interface, SocketSet, SocketStorage},
+    time::Duration,
     wire::{IpAddress, IpCidr},
 };
 use stm32h7xx_hal::{
-    ethernet::{self, phy::LAN8742A, StationManagement, PHY as _},
-    gpio::{ErasedPin, Output},
+    ethernet::{self, PHY as _},
     interrupt, pac,
     prelude::*,
     stm32,
@@ -57,7 +51,6 @@ fn main() -> ! {
     let gpiog = dp.GPIOG.split(ccdr.peripheral.GPIOG);
     let gpioe = dp.GPIOE.split(ccdr.peripheral.GPIOE);
 
-    let link_led = gpiob.pb0.into_push_pull_output().erase();
     let led = gpioe.pe1.into_push_pull_output().erase();
 
     let rmii_ref_clk = gpioa.pa1.into_alternate();
@@ -116,7 +109,7 @@ fn main() -> ! {
 
     // ANCHOR: interface_init
     let config = smoltcp::iface::Config::new(smoltcp::wire::HardwareAddress::Ethernet(mac_addr));
-    let mut interface = Interface::new(config, &mut eth_dma, smol_now());
+    let mut interface = Interface::new(config, &mut eth_dma, liltcp::smoltcp_lilos::smol_now());
     interface.update_ip_addrs(|addrs| {
         let _ = addrs.push(IpCidr::new(IpAddress::v4(10, 106, 0, 251), 24));
     });
@@ -143,9 +136,9 @@ fn main() -> ! {
     unsafe {
         lilos::exec::run_tasks_with_preemption(
             &mut [
-                core::pin::pin!(led_task(led)),
-                core::pin::pin!(poll_link(lan8742a, link_led)),
-                core::pin::pin!(poll_socket(stack)),
+                core::pin::pin!(liltcp::led_task(led)),
+                //core::pin::pin!(poll_link(lan8742a, link_led)),
+                core::pin::pin!(net_task(stack)),
                 core::pin::pin!(poll_smoltcp(&stack, eth_dma)),
             ],
             lilos::exec::ALL_TASKS,
@@ -155,163 +148,65 @@ fn main() -> ! {
     // ANCHOR_END: spawn
 }
 
-struct StackState<'a> {
-    sockets: SocketSet<'a>,
-    interface: Interface,
-}
-
-#[derive(Clone, Copy)]
-struct Stack<'a> {
-    inner: &'a Mutex<RefCell<StackState<'a>>>,
-}
-
-impl<'a> Stack<'a> {
-    fn with<F, U>(&self, cs: &cortex_m::interrupt::CriticalSection, f: F) -> U
-    where
-        F: FnOnce((&mut SocketSet<'a>, &mut Interface)) -> U,
-    {
-        let (mut interface, mut sockets) =
-            RefMut::map_split(self.inner.borrow(cs).borrow_mut(), |r| {
-                (&mut r.interface, &mut r.sockets)
-            });
-        f((&mut sockets, &mut interface))
-    }
-}
-
-struct TcpClient<'a> {
-    stack: Stack<'a>,
-    handle: SocketHandle,
-}
-
-impl<'a> TcpClient<'a> {
-    fn with<F, U>(&mut self, cs: &cortex_m::interrupt::CriticalSection, f: F) -> U
-    where
-        F: FnOnce(&mut tcp::Socket, &mut Context) -> U,
-    {
-        self.stack.with(cs, |(sockets, interface)| {
-            let mut socket = sockets.get_mut(self.handle);
-
-            f(&mut socket, interface.context())
-        })
-    }
-
-    async fn connect(&mut self) {
-        poll_fn(|cx| {
-            cortex_m::interrupt::free(|cs| {
-                self.with(cs, |socket, context| {
-                    defmt::info!("connect polled.");
-                    socket.register_recv_waker(cx.waker());
-
-                    if !socket.is_open() {
-                        defmt::info!("not open, issuing connect");
-                        defmt::unwrap!(socket.connect(
-                            context,
-                            (IpAddress::v4(10, 106, 0, 198), 8001),
-                            52234,
-                        ));
-                        Poll::Pending
-                    } else {
-                        defmt::info!("connected");
-                        Poll::Ready(())
-                    }
-                })
-            })
-        })
-        .await
-    }
-}
-
-async fn poll_socket<'a>(stack: Stack<'a>) -> Infallible {
+async fn net_task<'a>(stack: Stack<'a>) -> Infallible {
     static mut TX: [u8; 1024] = [0u8; 1024];
     static mut RX: [u8; 1024] = [0u8; 1024];
 
-    let rx_buffer = unsafe { RingBuffer::new(&mut RX[..]) };
-    let tx_buffer = unsafe { RingBuffer::new(&mut TX[..]) };
-
-    let client = smoltcp::socket::tcp::Socket::new(rx_buffer, tx_buffer);
-
-    let handle =
-        cortex_m::interrupt::free(|cs| stack.with(cs, |(sockets, _interface)| sockets.add(client)));
-
-    let mut client = TcpClient { stack, handle };
+    let mut client = TcpClient::new(stack, unsafe { &mut RX[..] }, unsafe { &mut TX[..] });
 
     // connect
-    client.connect().await;
+    client.connect().await.unwrap();
 
+    let buff = [0x55; 1024];
     loop {
         // loopback
-        cortex_m::interrupt::free(|cs| {
-            client.with(cs, |socket, _context| {
-                let mut buffer = [0u8; 10];
-                if socket.can_recv() {
-                    let len = defmt::unwrap!(socket.recv_slice(&mut buffer));
-                    defmt::info!("recvd: {} bytes {}", len, buffer[..len]);
-                }
-                if socket.can_send() {
-                    defmt::unwrap!(socket.send_slice(b"world"));
-                }
-            })
-        });
-        sleep_for(lilos::time::Millis(3000)).await;
-    }
-}
-
-// ANCHOR: poll_smoltcp
-async fn poll_smoltcp<'a>(stack: &Stack<'a>, mut dev: ethernet::EthernetDMA<4, 4>) -> Infallible {
-    loop {
-        let _ready = cortex_m::interrupt::free(|cs| {
-            stack.with(cs, |(sockets, interface)| {
-                interface.poll(smol_now(), &mut dev, sockets)
-            })
-        });
-
-        // NOTE: Not performant, doesn't handle interrupt signal, cancel the wait on IRQ, etc.
-        // NOTE: In async code, this will be replaced with a more elaborate calling of poll_at.
-        lilos::time::sleep_for(lilos::time::Millis(1)).await;
-    }
-}
-// ANCHOR_END: poll_smoltcp
-
-// Periodically poll if the link is up or down
-async fn poll_link<MAC: StationManagement>(
-    mut phy: LAN8742A<MAC>,
-    mut link_led: ErasedPin<Output>,
-) -> Infallible {
-    let mut gate = PeriodicGate::from(Millis(1000));
-    let mut eth_up = false;
-    loop {
-        gate.next_time().await;
-
-        let eth_last = eth_up;
-        eth_up = phy.poll_link();
-
-        link_led.set_state(eth_up.into());
-
-        if eth_up != eth_last {
-            if eth_up {
-                defmt::info!("UP");
-            } else {
-                defmt::info!("DOWN");
-            }
+        // let mut buffer = [0u8; 5];
+        // let len = defmt::unwrap!(client.recv(&mut buffer).await);
+        match client.send(&buff).await {
+            Ok(_) => {}
+            Err(_) => todo!(),
         }
     }
 }
 
-async fn led_task(mut led: ErasedPin<Output>) -> Infallible {
-    let mut gate = PeriodicGate::from(lilos::time::Millis(500));
+static SYNCER: lilos::exec::Notify = lilos::exec::Notify::new();
+
+// ANCHOR: poll_smoltcp
+async fn poll_smoltcp<'a>(stack: &Stack<'a>, mut dev: ethernet::EthernetDMA<4, 4>) -> Infallible {
     loop {
-        led.toggle();
-        gate.next_time().await;
+        let poll_delay = cortex_m::interrupt::free(|cs| {
+            stack.with(cs, |(sockets, interface)| {
+                interface
+                    .poll_delay(smol_now(), sockets)
+                    .unwrap_or(Duration::from_millis(1))
+            })
+        });
+
+        match embassy_futures::select::select(
+            lilos::time::sleep_for(lilos::time::Millis(poll_delay.millis())),
+            SYNCER.until_next(),
+        )
+        .await
+        {
+            select::Either::First(_) => {}
+            select::Either::Second(_) => {}
+        }
+
+        cortex_m::interrupt::free(|cs| {
+            stack.with(cs, |(sockets, interface)| {
+                interface.poll(smol_now(), &mut dev, sockets)
+            })
+        });
     }
 }
+// ANCHOR_END: poll_smoltcp
 
 #[cortex_m_rt::interrupt]
 fn ETH() {
+    // TODO: embassy_net wakes polling task any time RX or TX tokens are consumed, resulting in 3x
+    // throughput
     unsafe {
+        SYNCER.notify();
         ethernet::interrupt_handler();
     }
-}
-
-fn smol_now() -> smoltcp::time::Instant {
-    smoltcp::time::Instant::from_millis(u64::from(lilos::time::TickTime::now()) as i64)
 }
