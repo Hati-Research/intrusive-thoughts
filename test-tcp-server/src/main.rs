@@ -15,11 +15,11 @@ fn main() {
                 println!("connected");
                 let mut read_buffer = vec![0u8; 1000];
                 loop {
+                    stream.write_all(b"hello").unwrap();
+                    println!("written");
                     if let Ok(read) = stream.read(&mut read_buffer) {
                         println!("read some data: {read} bytes {:?}", &read_buffer[..read]);
                     }
-                    stream.write_all(b"hello").unwrap();
-                    println!("written");
                     std::thread::sleep(Duration::from_millis(1000));
                 }
             }

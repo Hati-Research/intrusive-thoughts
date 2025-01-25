@@ -1,28 +1,38 @@
 use core::cell::{RefCell, RefMut};
 
-use cortex_m::interrupt::Mutex;
-use smoltcp::iface::{Interface, SocketSet};
+use smoltcp::iface::{Interface, SocketSet, SocketStorage};
 
-// TODO: visibility
-pub struct StackState<'a> {
-    pub sockets: SocketSet<'a>,
-    pub interface: Interface,
+pub struct InnerStack<'a> {
+    sockets: SocketSet<'a>,
+    interface: Interface,
+}
+
+impl<'a> InnerStack<'a> {
+    pub fn new(storage: &'a mut [SocketStorage<'a>], interface: Interface) -> Self {
+        Self {
+            sockets: SocketSet::new(storage),
+            interface,
+        }
+    }
 }
 
 #[derive(Clone, Copy)]
 pub struct Stack<'a> {
-    pub inner: &'a Mutex<RefCell<StackState<'a>>>,
+    inner: &'a RefCell<InnerStack<'a>>,
 }
 
 impl<'a> Stack<'a> {
-    pub fn with<F, U>(&self, cs: &cortex_m::interrupt::CriticalSection, f: F) -> U
+    pub fn new(inner: &'a RefCell<InnerStack<'a>>) -> Self {
+        Self { inner }
+    }
+
+    pub fn with<F, U>(&self, f: F) -> U
     where
         F: FnOnce((&mut SocketSet<'a>, &mut Interface)) -> U,
     {
-        let (mut interface, mut sockets) =
-            RefMut::map_split(self.inner.borrow(cs).borrow_mut(), |r| {
-                (&mut r.interface, &mut r.sockets)
-            });
+        let (mut interface, mut sockets) = RefMut::map_split(self.inner.borrow_mut(), |r| {
+            (&mut r.interface, &mut r.sockets)
+        });
         f((&mut sockets, &mut interface))
     }
 }
