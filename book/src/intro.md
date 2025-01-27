@@ -3,34 +3,44 @@
 > I've been having some intrusive thoughts - that while async embedded Rust is great,
 it could also be better, more transparent and best practices should be documented.
 
+This book serves two main purposes:
+
+* To demystify some parts of the current embedded Rust ecosystem and
+provide example solution to some pain points that exist today.
+* To serve as a notebook for my ideas. Note that these are just ideas,
+not a definitive source of truth.
+These ideas may be presented in a very raw form and important parts may be missing.
+
 <div class="warning">
-    This is more of a notebook for my ideas
-    and their exploration than a source of truth.
-    The ideas presented here may be in a very raw form.
-    In no way are they meant to be insulting to anyone or offensive.</br>
-    This project builds on top of the work of many others,
-    the author will try to attribute them whenever needed,
-    but feel free to let them know if something is wrong.
+  Embedded Rust is a result of a work of many exremely talented and hardworking people.
+  I have my utmost respect for them and for what they achieved.
+  This book is not about complaining about problems of the ecosystem,
+  but rather about providing some of the missing pieces.
 </div>
 
-The intrusive thoughts revolved around the following ideas:
+My intrusive thoughts revolve around the following ideas (in no particular order):
 
-* Improve tooling - make common tasks easy (measure binary size, bss use),
-crash inspections, logs inspections
-* develop RP2350 HAL with primitives for more low level DMA and drivers
-(something like lilos's Notify)
-* develop a simple async executor
-* try to utilize intrusive linked lists instead of static allocations
-* formalize a way to do tracing
-* standardized firmware metadata storage
-* add best practices for panic/hardfault handling and post-mortem debugging
+* Tooling improvements - make common tasks easy (measure binary size, bss use),
+crash inspections, logs inspections.
+* Explanation of async on embedded by developing a simple async executor.
+* Exploration of intrusive linked list as an alternative to static or fixed size allocation.
+* Tracing for embedded async.
+* Standardization of reading and writing of firmware metadata.
+* Developing best practices for panic/hardfault handling and post-mortem debugging.
+* Developing a limited example RP2350 HAL with primitives for more low level DMA
+and drivers (something like lilos's Notify).
 
-Embedded Rust is great and is result of the work of many awesome
-and talented people, but there are some rough edges:
+Some of the aforementioned rough edges IMHO are:
 
-* it is unclear how to do things
-* too many generics, especially when trying to achieve independence on hardware
-* embassy hals are too high level
-  (writing driver for DCMI should be possible with double buffering, without hacking the HAL itself)
-* It is unclear why things go wrong (panic handling, hardfault handling, task monitoring)
-* post mortem debugging is difficult (maybe even unexplored)
+* It is unclear how to do some common things
+(e.g. `static mut` handling, especially in the context of 2024 edition changes).
+* Writing hardware independent/HAL independent drivers requires
+a lot of "infectious" generics.
+* HALs lock the users into a specific ways of using peripherals, because it is
+often impractical to implement all of the peripheral IP features.
+As a result of this, making highly special things is hard -
+an example of this is abusing the double buffered DMA
+to support reading from the DCMI peripheral on STM32 to allow for DMA reads
+consisting of more than 65535 transfers.
+* Debugging of why things don't work (for example even before defmt is available)
+is not well documented.

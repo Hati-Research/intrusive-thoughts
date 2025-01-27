@@ -124,11 +124,13 @@ pub unsafe fn take_des_ring() -> &'static mut ethernet::DesRing<4, 4> {
 
 pub const NVIC_BASEPRI: u8 = 0x80;
 
+// ANCHOR: enable_eth_interrupt
 pub unsafe fn enable_eth_interrupt(nvic: &mut pac::NVIC) {
     ethernet::enable_interrupt();
     nvic.set_priority(stm32h7xx_hal::stm32::Interrupt::ETH, NVIC_BASEPRI - 1);
     cortex_m::peripheral::NVIC::unmask(stm32h7xx_hal::stm32::Interrupt::ETH);
 }
+// ANCHOR_END: enable_eth_interrupt
 
 // same panicking *behavior* as `panic-probe` but doesn't print a panic message
 // this prevents the panic message being printed *twice* when `defmt::panic` is invoked
@@ -157,6 +159,7 @@ unsafe fn HardFault(_frame: &cortex_m_rt::ExceptionFrame) -> ! {
     }
 }
 
+// ANCHOR: led_task
 pub async fn led_task(mut led: ErasedPin<Output>) -> Infallible {
     let mut gate = PeriodicGate::from(lilos::time::Millis(500));
     loop {
@@ -164,3 +167,4 @@ pub async fn led_task(mut led: ErasedPin<Output>) -> Infallible {
         gate.next_time().await;
     }
 }
+// ANCHOR_END: led_task

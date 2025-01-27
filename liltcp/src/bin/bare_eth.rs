@@ -49,7 +49,7 @@ fn main() -> ! {
     let mut lan8742a = ethernet::phy::LAN8742A::new(eth_mac.set_phy_addr(0));
     lan8742a.phy_reset();
     lan8742a.phy_init();
-    // ANCHOR: eth_init
+    // ANCHOR_END: eth_init
 
     lilos::time::initialize_sys_tick(&mut cp.SYST, ccdr.clocks.sysclk().to_Hz());
 
