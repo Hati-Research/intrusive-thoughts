@@ -34,8 +34,11 @@ defmt::timestamp!("{=usize}", COUNT.fetch_add(1, Ordering::Relaxed));
 pub const MAC: smoltcp::wire::EthernetAddress =
     smoltcp::wire::EthernetAddress([0x12, 0x00, 0x00, 0x00, 0x00, 0x00]);
 
+// ANCHOR: ip_address_constants
 pub const IP_ADDR: Ipv4Address = Ipv4Address::new(10, 106, 0, 251);
 pub const PREFIX_LEN: u8 = 24;
+// ANCHOR_END: ip_address_constants
+
 pub const REMOTE_ENDPOINT: IpEndpoint =
     IpEndpoint::new(Ipv4Address::new(10, 106, 0, 198).into_address(), 8001);
 pub const LOCAL_ENDPOINT: u16 = 55128;

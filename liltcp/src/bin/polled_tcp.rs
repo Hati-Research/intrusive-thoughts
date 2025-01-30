@@ -3,7 +3,7 @@
 
 use core::convert::Infallible;
 
-use lilos::exec::Interrupts;
+use lilos::exec::{Interrupts, Notify};
 use liltcp as _;
 use smoltcp::{
     iface::{Interface, SocketSet, SocketStorage},

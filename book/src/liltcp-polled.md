@@ -1,9 +1,42 @@
-## Polled TCP
+# Polled TCP
 
-Let's now make another step forward and add a smoltcp TCP client.
-This client will be driven by periodic polling.
-This is similar to the classic [RTIC based examples](https://github.com/stm32-rs/stm32-eth/blob/master/examples/rtic-echo.rs),
-where the whole stack is dealt with inside of the ethernet interrupt.
+When developing a classic embedded Rust application that uses smoltcp for networking
+(either using RTIC or no executor at all),
+a common way to do that is to handle networking as part of the ethernet interrupt.
+This has a few problems:
+
+- Dependencies to the interrupt have to be declared as global statics.
+- The IRQ must never block.
+- It is harder to add another source of forcing the stack polling.
+- It is up to the developer to handle the state machine properly.
+  (This will be solved in the next chapter with async.)
+
+Let's try to solve the first two problems by adding a simple async task, which will periodically poll the `smoltcp` interface and handle a TCP client.
+
+For reference, an example of an RTIC example can be found [here](https://github.com/stm32-rs/stm32-eth/blob/master/examples/rtic-echo.rs).
+
+At this point, we will be using the network layer, so the first thing we need
+to do is to configure an IP address for our smoltcp interface.
+
+```rust,ignored
+{{#include ../../liltcp/src/bin/polled_tcp.rs:interface_init}}
+```
+
+The IP address and PREFIX_LEN are defined in the `lib.rs` as follows:
+
+```rust,ignored
+{{#include ../../liltcp/src/lib.rs:ip_address_constants}}
+```
+
+In theory, it should be possible to initialize the whole CIDR address
+in a single constant, but the patch has only landed recently
+and is not released yet.
+
+Another thing included in the snippet is allocation of a `SocketStorage`
+and a `SocketSet`, which is `smoltcp`'s way of storing active sockets.
+In this case, we will add only one socket, so the storage array length will be `1`.
+
+---
 
 This example is a bit more elaborate and its source can be found [here](https://github.com/Hati-Research/intrusive-thoughts/blob/main/liltcp/src/bin/polled_tcp.rs).
 
