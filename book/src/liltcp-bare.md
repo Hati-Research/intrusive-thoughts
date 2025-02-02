@@ -1,9 +1,9 @@
-# Initializing and polling the ethernet peripheral
+# Initializing and polling the Ethernet peripheral
 
 At this point, we know that the devkit is able to run our code,
 but it doesn't yet do anything network related, so let's change that.
 
-First, we need to initialize the ethernet peripheral driver from the HAL.
+First, we need to initialize the Ethernet peripheral driver from the HAL.
 
 ```rust
 {{#include ../../liltcp/src/bin/bare_eth.rs:eth_init}}
@@ -43,7 +43,7 @@ The final thing left to do is to spawn the task and run the binary on our devkit
 {{#include ../../liltcp/src/bin/bare_eth.rs:spawn}}
 ```
 
-When you plug in an ethernet cable, there should be a log visible
-in the terminal and also an LED should light up.
+When you plug in an Ethernet cable, there should be a log visible
+in the terminal and an LED should light up.
 
-We are now ready to move on to actually receiving and transmitting data via the ethernet.
+We are now ready to move on to actually receiving and transmitting data via the Ethernet.

@@ -70,7 +70,7 @@ fn main() -> ! {
 
     // ANCHOR: stack_init
     let mut storage = [SocketStorage::EMPTY; 1];
-    // NOTE: This unneccessarily exposes implementation details of the Stack's shared state.
+    // NOTE: This unnecessarily exposes implementation details of the Stack's shared state.
     // For the purposes of this demo, it is fine, but it should be hidden in production impl.
     let inner_stack = RefCell::new(InnerStack::new(&mut storage, interface));
     let stack = Stack::new(&inner_stack);
@@ -94,7 +94,7 @@ fn main() -> ! {
 }
 
 // ANCHOR: tcp_client_task
-async fn tcp_client_task<'a>(stack: Stack<'a>) -> Infallible {
+async fn tcp_client_task(stack: Stack<'_>) -> Infallible {
     static mut TX: [u8; 1024] = [0u8; 1024];
     static mut RX: [u8; 1024] = [0u8; 1024];
 
@@ -111,18 +111,20 @@ async fn tcp_client_task<'a>(stack: Stack<'a>) -> Infallible {
     loop {
         let mut buffer = [0u8; 5];
         let len = defmt::unwrap!(client.recv(&mut buffer).await);
-        // let's not care about the number of sent life, with the current buffer settings, it
-        // should always write full buffer
+        // Let's not care about the number of sent bytes,
+        // with the current buffer settings, it should always write full buffer.
         defmt::unwrap!(client.send(&buffer[..len]).await);
     }
 }
 // ANCHOR_END: tcp_client_task
 
-// ANCHOR: net_task
+// ANCHOR: irq_notify
 static IRQ_NOTIFY: lilos::exec::Notify = lilos::exec::Notify::new();
+// ANCHOR_END: irq_notify
 
-async fn net_task<'a>(
-    stack: Stack<'a>,
+// ANCHOR: net_task
+async fn net_task(
+    mut stack: Stack<'_>,
     mut dev: ethernet::EthernetDMA<4, 4>,
     mut phy: LAN8742A<impl StationManagement>,
     mut link_led: ErasedPin<Output>,
@@ -170,11 +172,11 @@ async fn net_task<'a>(
 // ANCHOR: eth_irq
 #[cortex_m_rt::interrupt]
 fn ETH() {
-    // NOTE: embassy_net wakes polling task any time RX or TX tokens are consumed, resulting in 3x
-    // throughput
-    IRQ_NOTIFY.notify();
     unsafe {
         ethernet::interrupt_handler();
     }
+    // NOTE: embassy_net wakes polling task any time RX or TX tokens are consumed, resulting in 3x
+    // throughput
+    IRQ_NOTIFY.notify();
 }
 // ANCHOR_END: eth_irq

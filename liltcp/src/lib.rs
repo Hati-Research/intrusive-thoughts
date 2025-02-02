@@ -66,6 +66,7 @@ pub struct Gpio<Rmii: PinsRMII> {
     pub eth_pins: Rmii,
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn init_gpio(
     gpioa: pac::GPIOA,
     clocka: rcc::rec::Gpioa,
@@ -116,6 +117,8 @@ static DES_RING: GroundedCell<ethernet::DesRing<4, 4>> = GroundedCell::uninit();
 
 static DES_RING_TAKEN: AtomicBool = AtomicBool::new(false);
 
+/// # Safety
+/// Unsafe invariant handled in runtime
 pub unsafe fn take_des_ring() -> &'static mut ethernet::DesRing<4, 4> {
     if DES_RING_TAKEN.swap(true, atomic::Ordering::SeqCst) {
         panic!("take_des_ring called multiple times");
@@ -127,6 +130,8 @@ pub unsafe fn take_des_ring() -> &'static mut ethernet::DesRing<4, 4> {
 
 pub const NVIC_BASEPRI: u8 = 0x80;
 
+/// # Safety
+/// yolo
 // ANCHOR: enable_eth_interrupt
 pub unsafe fn enable_eth_interrupt(nvic: &mut pac::NVIC) {
     ethernet::enable_interrupt();

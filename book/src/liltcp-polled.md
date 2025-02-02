@@ -15,6 +15,8 @@ Let's try to solve the first two problems by adding a simple async task, which w
 
 For reference, an example of an RTIC example can be found [here](https://github.com/stm32-rs/stm32-eth/blob/master/examples/rtic-echo.rs).
 
+## Configuring the IP address
+
 At this point, we will be using the network layer, so the first thing we need
 to do is to configure an IP address for our smoltcp interface.
 
@@ -36,65 +38,70 @@ Another thing included in the snippet is allocation of a `SocketStorage`
 and a `SocketSet`, which is `smoltcp`'s way of storing active sockets.
 In this case, we will add only one socket, so the storage array length will be `1`.
 
----
+## Network task
 
-This example is a bit more elaborate and its source can be found [here](https://github.com/Hati-Research/intrusive-thoughts/blob/main/liltcp/src/bin/polled_tcp.rs).
-
-Let's describe the important parts here.
-
-First, we need to initialize the interface.
-As can be seen, an IP address is set to the interface, according to your local network settings.
-Then we statically allocate a `SocketStorage` with a fixed capacity of `1`,
-since we will be adding only one socket for now.
+Now, that the preparations are out of the way, we can define our net_task.
+This task will handle both polling of the stack and handling of TCP
+(even though it will be simplified.
 
 ```rust,ignored
-{{#include ../../liltcp/src/bin/polled_tcp.rs:interface_init}}
+{{#include ../../liltcp/src/bin/polled_tcp.rs:net_task}}
 ```
 
-Next, we want to add a task that will handle the polling:
+First, we define buffers that the TCP socket will internally use.
+These are defined as mutable statics, because they need to have the same
+lifetime or outlive the `'a` lifetime defined for the `SocketSet`.
+Next, we create a TCP socket and add it to our `SocketSet`.
+This call gives us a handle that can be used to later access the socket through
+the `SocketSet`.
+
+Now, the polling itself takes place.
+This is done in a loop with a labeled block called `'worker`.
+First, we check that the link is UP, if it is not the case, let's just break the
+`'worker` block.
+If the link is UP, we poll the interface to check if there are any new data
+to be processed by our socket.
+When there are, we can access our socket using the aforementioned handle and we
+can do operations with it.
+In this case, we check if it is open, if it is not the case, we attempt to connect to a
+remote endpoint and break the `'worker` block to let the interface be polled again.
+On next polls, if the socket is open, we attempt to do a read and subsequently
+a write.
+
+In the case of completion of the `'worker` block or the block being interrupted
+by the `break 'worker`, the task will sleep for a millisecond.
+
+<div class="warning">
+This implementation is not meant to showcase an implementation of a TCP socket.
+Right now, there are many unhandled states and it is very likely that this
+will panic if you look at it wrong.
+<br>
+<br>
+Another big problem here is performance, the polling loop runs with a
+fixed period of 1 ms.
+</div>
+
+## Spawning the network task
+
+Now we can simply spawn our task and let it do the polling and TCP handling.
 
 ```rust,ignored
-{{#include ../../liltcp/src/bin/polled_tcp.rs:poll_smoltcp}}
-```
-
-This task first, allocates a TCP socket in the provided `SocketSet`,
-then attempts to connect (if socket is not open)
-and then tries to send and receive data).
-
-The whole polling runs with a millisecond loop.
-This is definitely not performat, we want the polling to be triggered by
-either the ethernet interrupt or when `smoltcp` tells us to via its `poll_at` method.
-
-Finally, we spawn the task in `main` using the following.
-
-```rust, ignored
 {{#include ../../liltcp/src/bin/polled_tcp.rs:spawn}}
 ```
 
-We now have a TCP client that is able to connect to a remote server
-and it works for the most basic of use cases.
-Apart from the mentioned performance shortcomings,
-it is also tiresome to add more sockets or their handling.
-We'd need to handle everything networking-related in this task,
-which would not be very readable
-and would break both the Locality of Behavior and Separation of Concers principles,
-that we want to uphold in all of our code.
+## Conclusions
 
-> The functionality was tested using a simple program found [here](https://github.com/Hati-Research/intrusive-thoughts/blob/main/test-tcp-server/src/main.rs).
+This solution is probably good enough for a simple tests, but apart from it not
+being async, there is one big problem - adding the TCP handling will soon
+become a hassle, with any addition.
 
-### Splitting polling and socket access
+This is caused by these factors:
 
-Let's now try to split polling and accessing the sockets themselves,
-so that we can access sockets without having to incorporate them into
-the state machine in the poll_smolltcp task.
+- It is tightly coupled with smoltcp stack polls.
+- Adding more sockets will clutter the code even more.
+- Adding any kind of timeout would block the entire task,
+or you'd need to implement some sort of a state machine that will handle
+this - but this is what we want to use async for.
 
-We start by creating a new `poll_socket` and the first problem we encounter is trying to share the socket storage between the two tasks because they both take a mutable reference. Let's work around this for now using a mutex in a combo with `RefCell`.
-
-Once we finish fighting the borrow checker on this front,
-we figure out that another thing that needs sharing like this is the `interface`.
-Right now, whe have two values that need to be accessed while holding a mutex,
-so to make things simple, let's group them into a `StackState` struct.
-This brings anothe advantage, which is the possibility to write member methods
-for this struct, making the code a bit more readable.
-Again, mainly for better readability, let's typealias this type:
-`Mutex<RefCell<StackState<'a>>>` to just `SharedStackState<'a>`.
+Let's now have a quick intermezzo concerning decoupling of polling
+and socket handling. Let's share the smoltcp stack across tasks.

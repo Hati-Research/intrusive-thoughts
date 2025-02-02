@@ -3,7 +3,7 @@
 Sharing data between tasks is usually dependent on the executor and other environment.
 For example in embassy, sharing can be done with references with a static
 lifetime, since tasks are allocated in statics.
-In the `std` environment, you'd typicaly used something like an `Arc`.
+In the `std` environment, you'd typically used something like an `Arc`.
 
 In our environment (`lilos` executor), tasks are allocated on the stack.
 This means that for sharing data, we don't need to use references with a static
@@ -31,16 +31,16 @@ async fn task_b(res: &i32) -> Infallible { .. }
 
 ## Mutating the shared resources
 
-This basically solves the problem of sharing data betwen tasks,
+This basically solves the problem of sharing data between tasks,
 but one problem still remains - how can we mutate the shared data?
-We can't have multiple mutable references at once, so we need to utilize some
-kind of interior mutability pattern.
+We can't have multiple mutable references at the same time, so we need to
+utilize some kind of interior mutability pattern.
 This is usually done with the `Cell` or `RefCell` types.
 `Cell` is not very useful for our use case, since it provides mutability by
 moving in and out of it.
 `RefCell` is much more interesting, because it allows us to obtain mutable and
 immutable references to our data.
-Without going into much detail, RefCell basically implements the borrow checker
+Without going into much detail, `RefCell` basically implements the borrow checker
 and its rules in the runtime, instead of compile time.
 
 <div class="warning">
@@ -93,7 +93,7 @@ the code would crash upon obtaining another mutable borrow from the `RefCell`.
 This code is quite good until there are more shared resources, or the need
 arises to implement methods on the shared resource.
 Ideally, we'd like to be able to wrap the shared state into a structure and not
-expose the implementation detail of the shared reference and interrior mutability.
+expose the implementation detail of the shared reference and interior mutability.
 
 The approach I have chosen for this is to create a wrapper around the shared reference.
 Until we add some more fields to the wrapper, it will be trivially copyable -
@@ -155,12 +155,12 @@ the `InnerStack` - to the `SocketStorage` and to the `Interface`.
 
 This seems simple at first, but is a bit involved as it goes against the borrow
 checker's rules on mutable borrows.
-Trying it out is left as an excercise to the reader.
+Trying it out is left as an exercise to the reader.
 
 The solution to this is to use the `RefMut::map_split` function to effectively
 split one `RefMut` into two `RefMut`s.
 
-Combining all of the above together and modifying it to fit the needs of
+Combining all the above together and modifying it to fit the needs of
 a `smoltcp` wrapper, we get the following code.
 
 ```rust,ignored

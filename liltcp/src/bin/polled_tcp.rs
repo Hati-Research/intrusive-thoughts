@@ -3,7 +3,7 @@
 
 use core::convert::Infallible;
 
-use lilos::exec::{Interrupts, Notify};
+use lilos::exec::Interrupts;
 use liltcp as _;
 use smoltcp::{
     iface::{Interface, SocketSet, SocketStorage},
@@ -74,7 +74,7 @@ fn main() -> ! {
         lilos::exec::run_tasks_with_preemption(
             &mut [
                 core::pin::pin!(liltcp::led_task(gpio.led)),
-                core::pin::pin!(poll_smoltcp(
+                core::pin::pin!(net_task(
                     interface,
                     eth_dma,
                     &mut sockets,
@@ -90,10 +90,10 @@ fn main() -> ! {
 }
 
 // ANCHOR: net_task
-async fn poll_smoltcp<'a>(
+async fn net_task(
     mut interface: Interface,
     mut dev: ethernet::EthernetDMA<4, 4>,
-    sockets: &mut SocketSet<'a>,
+    sockets: &mut SocketSet<'_>,
     mut phy: LAN8742A<impl StationManagement>,
     mut link_led: ErasedPin<Output>,
 ) -> Infallible {

@@ -1,6 +1,5 @@
 [target.'cfg(all(target_arch = "arm", target_os = "none"))']
 runner = "probe-rs run --chip STM32H743ZITx --connect-under-reset"
-# runner = ["probe-rs", "run", "--chip", "$CHIP", "--log-format", "{L} {s}"]
 
 rustflags = [
   "-C", "link-arg=-Tlink.x",
@@ -11,16 +10,7 @@ rustflags = [
 ]
 
 [build]
-# (`thumbv6m-*` is compatible with all ARM Cortex-M chips but using the right
-# target improves performance)
-# target = "thumbv6m-none-eabi"    # Cortex-M0 and Cortex-M0+
-# target = "thumbv7m-none-eabi"    # Cortex-M3
-# target = "thumbv7em-none-eabi"   # Cortex-M4 and Cortex-M7 (no FPU)
 target = "thumbv7em-none-eabihf" # Cortex-M4F and Cortex-M7F (with FPU)
 
 [env]
 DEFMT_LOG = "info"
-
-[alias]
-rb = "run --bin"
-rrb = "run --release --bin"

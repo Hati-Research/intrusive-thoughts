@@ -1,3 +1,5 @@
+/* Taken from stm32h7xx-hal */
+
 MEMORY
 {
   /* FLASH and RAM are mandatory memory regions */

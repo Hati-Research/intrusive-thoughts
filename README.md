@@ -1,9 +1,9 @@
-# Introduction
+# Intrusive thoughts
 
 > I've been having some intrusive thoughts - that while async embedded Rust is great,
 it could also be better, more transparent and best practices should be documented.
 
-This book serves two main purposes:
+This project serves two main purposes:
 
 * To demystify some parts of the current embedded Rust ecosystem and
 provide example solutions to some pain points that exist today.
@@ -44,3 +44,30 @@ to support reading from the DCMI peripheral on STM32 to allow for DMA reads
 consisting of more than 65535 transfers.
 * Debugging of why things don't work (for example even before defmt is available)
 is not well documented.
+
+## License
+
+```license
+MIT License
+
+Copyright (c) 2025 Hati Research, Matous Hybl
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+```

@@ -26,7 +26,7 @@ impl<'a> Stack<'a> {
         Self { inner }
     }
 
-    pub fn with<F, U>(&self, f: F) -> U
+    pub fn with<F, U>(&mut self, f: F) -> U
     where
         F: FnOnce((&mut SocketSet<'a>, &mut Interface)) -> U,
     {

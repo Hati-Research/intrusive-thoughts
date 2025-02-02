@@ -9,13 +9,16 @@ use smoltcp::{
 
 use crate::stack::Stack;
 
+// ANCHOR: tcp_client
 pub struct TcpClient<'a> {
     pub stack: Stack<'a>,
     pub handle: SocketHandle,
 }
+// ANCHOR_END: tcp_client
 
 impl<'a> TcpClient<'a> {
-    pub fn new(stack: Stack<'a>, rx_buffer: &'a mut [u8], tx_buffer: &'a mut [u8]) -> Self {
+    // ANCHOR: tcp_new
+    pub fn new(mut stack: Stack<'a>, rx_buffer: &'a mut [u8], tx_buffer: &'a mut [u8]) -> Self {
         let rx_buffer = RingBuffer::new(rx_buffer);
         let tx_buffer = RingBuffer::new(tx_buffer);
 
@@ -24,18 +27,22 @@ impl<'a> TcpClient<'a> {
 
         Self { stack, handle }
     }
+    // ANCHOR_END: tcp_new
 
+    // ANCHOR: with
     fn with<F, U>(&mut self, f: F) -> U
     where
         F: FnOnce(&mut tcp::Socket, &mut Context) -> U,
     {
         self.stack.with(|(sockets, interface)| {
-            let mut socket = sockets.get_mut(self.handle);
+            let socket = sockets.get_mut(self.handle);
 
-            f(&mut socket, interface.context())
+            f(socket, interface.context())
         })
     }
+    //ANCHOR_END: with
 
+    // ANCHOR: connect
     pub async fn connect(
         &mut self,
         remote_endpoint: impl Into<IpEndpoint>,
@@ -62,7 +69,9 @@ impl<'a> TcpClient<'a> {
         })
         .await
     }
+    // ANCHOR_END: connect
 
+    // ANCHOR: send
     pub async fn send(&mut self, buf: &[u8]) -> Result<usize, SendError> {
         poll_fn(|cx| {
             self.with(|socket, _context| match socket.send_slice(buf) {
@@ -76,7 +85,9 @@ impl<'a> TcpClient<'a> {
         })
         .await
     }
+    // ANCHOR_END: send
 
+    // ANCHOR: recv
     pub async fn recv(&mut self, buf: &mut [u8]) -> Result<usize, RecvError> {
         poll_fn(|cx| {
             self.with(|socket, _context| match socket.recv_slice(buf) {
@@ -94,4 +105,5 @@ impl<'a> TcpClient<'a> {
         })
         .await
     }
+    // ANCHOR_END: recv
 }
