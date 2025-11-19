@@ -9,3 +9,4 @@
   - [Async TCP client](./liltcp-async.md)
   - [Conclusion](./liltcp-conclusion.md)
 - [Sharing resources in no-std environments](./resource-sharing.md)
+- [Type erasure](./type_erasure.md)
